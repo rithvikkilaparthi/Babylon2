@@ -2,10 +2,10 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import * as BABYLON from "@babylonjs/core";
 import "@babylonjs/loaders";
-import { Loader2, Plus, Minus, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from "lucide-react";
+import { Loader2, Plus, Minus, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Upload } from "lucide-react";
 
 interface BabylonViewerProps {
-  modelName: string;
+  modelName?: string; // Make modelName optional
 }
 
 export default function BabylonViewer({ modelName }: BabylonViewerProps) {
@@ -31,14 +31,22 @@ export default function BabylonViewer({ modelName }: BabylonViewerProps) {
     const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), newScene);
     light.intensity = 1.5;
 
-    setLoading(true);
-    BABYLON.SceneLoader.ImportMesh("", `/models/${modelName}.glb`, "", newScene, (meshes) => {
-      meshes.forEach((mesh) => {
-        mesh.position = new BABYLON.Vector3(0, 0, 0);
-        mesh.scaling = new BABYLON.Vector3(1.5, 1.5, 1.5);
+    // Only load the model if modelName is provided
+    if (modelName) {
+      setLoading(true);
+      BABYLON.SceneLoader.ImportMesh("", `/models/${modelName}.glb`, "", newScene, (meshes) => {
+        meshes.forEach((mesh) => {
+          mesh.position = new BABYLON.Vector3(0, 0, 0);
+          mesh.scaling = new BABYLON.Vector3(1.5, 1.5, 1.5);
+        });
+        setLoading(false);
+      }, undefined, (scene, message, exception) => {
+        console.error("Error loading model:", message, exception);
+        setLoading(false);
       });
-      setLoading(false);
-    });
+    } else {
+      setLoading(false); // No model to load
+    }
 
     engine.runRenderLoop(() => newScene.render());
     window.addEventListener("resize", () => engine.resize());
@@ -66,10 +74,88 @@ export default function BabylonViewer({ modelName }: BabylonViewerProps) {
   const zoomIn = () => { if (camera) camera.radius -= 50; };
   const zoomOut = () => { if (camera) camera.radius += 50; };
 
+  const handlePlyUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !scene) return;
+
+    setLoading(true);
+
+    try {
+      const fileUrl = URL.createObjectURL(file);
+
+      // Clear existing meshes except ground and lights
+      scene.meshes.forEach((mesh) => {
+        if (mesh.name !== "ground" && !mesh.name.includes("light")) {
+          mesh.dispose();
+        }
+      });
+
+      // Load the PLY file using Babylon's PLY loader
+      BABYLON.SceneLoader.ImportMesh(
+        "",
+        "",
+        fileUrl,
+        scene,
+        (meshes) => {
+          // Successfully loaded the PLY
+          console.log("PLY loaded successfully", meshes);
+
+          // Center the model
+          const rootMesh = meshes[0];
+          const boundingBox = rootMesh.getBoundingInfo().boundingBox;
+          const center = boundingBox.centerWorld;
+
+          // Adjust position to center
+          rootMesh.position = new BABYLON.Vector3(-center.x, -center.y, -center.z);
+
+          // Adjust camera to focus on the model
+          if (camera) {
+            camera.setTarget(BABYLON.Vector3.Zero());
+            camera.alpha = Math.PI / 2;
+            camera.beta = Math.PI / 3;
+
+            // Set camera radius based on model size
+            const diagonal = boundingBox.maximumWorld.subtract(boundingBox.minimumWorld).length();
+            camera.radius = diagonal * 1.5;
+          }
+
+          setLoading(false);
+        },
+        (progressEvent) => {
+          // Loading progress
+          console.log("Loading progress: ", progressEvent);
+        },
+        (error) => {
+          // Error handling
+          console.error("Error loading PLY:", error);
+          setLoading(false);
+        },
+        ".ply" // Explicitly specify the file extension
+      );
+    } catch (error) {
+      console.error("Error during upload:", error);
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#fdfaf1]">
       <nav className="flex items-center justify-between p-4 bg-white shadow-md">
         <div className="text-xl font-bold text-gray-900">3D Viewer</div>
+        <input
+          type="file"
+          accept=".ply"
+          onChange={handlePlyUpload}
+          className="hidden"
+          id="ply-upload"
+        />
+        <label
+          htmlFor="ply-upload"
+          className="px-4 py-2 text-white bg-black rounded-lg cursor-pointer flex items-center gap-2"
+        >
+          <Upload className="w-5 h-5" />
+          Upload PLY
+        </label>
       </nav>
       <div className="flex-grow flex items-center justify-center bg-gray-100 relative">
         {loading && <Loader2 className="w-12 h-12 animate-spin text-gray-700" />}
@@ -97,7 +183,6 @@ export default function BabylonViewer({ modelName }: BabylonViewerProps) {
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>
-
       </div>
     </div>
   );

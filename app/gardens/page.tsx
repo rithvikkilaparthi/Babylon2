@@ -12,38 +12,43 @@ export default function GardensPage() {
     try {
       setUploading(true);
       
-      // First, upload the GLB file
+      // First, upload the model file
       const formData = new FormData();
-      formData.append('file', file);
-      
+      formData.append("file", file);
+
       // Upload the file to the models directory
-      const uploadResponse = await fetch('/api/upload', {
-        method: 'POST',
+      const uploadResponse = await fetch("/api/upload", {
+        method: "POST",
         body: formData,
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
+        throw new Error("Failed to upload file");
       }
 
+      const { filename } = await uploadResponse.json();
+
+      // Store uploaded model in local storage
+      localStorage.setItem("lastUploadedModel", filename);
+
       // Generate preview
-      const previewResponse = await fetch('/api/generate-preview', {
-        method: 'POST',
+      const previewResponse = await fetch("/api/generate-preview", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ filename: file.name }),
+        body: JSON.stringify({ filename }),
       });
 
       if (!previewResponse.ok) {
-        throw new Error('Failed to generate preview');
+        throw new Error("Failed to generate preview");
       }
 
       // Refresh the page to show the new model
       window.location.reload();
     } catch (error) {
-      console.error('Error uploading file:', error);
-      alert('Failed to upload file');
+      console.error("Error uploading file:", error);
+      alert("Failed to upload file");
     } finally {
       setUploading(false);
     }

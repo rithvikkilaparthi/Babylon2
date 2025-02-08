@@ -1,46 +1,20 @@
-import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from "react";
+"use client";
+import { forwardRef, useImperativeHandle, useState } from "react";
 import * as BABYLON from "@babylonjs/core";
 import "@babylonjs/loaders";
 import { Loader2 } from "lucide-react";
 
 interface UploadPlyProps {
-  onModelLoaded?: (meshes: BABYLON.AbstractMesh[]) => void;
+  scene: BABYLON.Scene | null;
+  camera: BABYLON.ArcRotateCamera | null;
 }
 
-const UploadPly = forwardRef(({ onModelLoaded }: UploadPlyProps, ref) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [scene, setScene] = useState<BABYLON.Scene | null>(null);
-  const [camera, setCamera] = useState<BABYLON.ArcRotateCamera | null>(null);
+export interface UploadPlyHandle {
+  handlePlyUpload: (file: File) => void;
+}
+
+const UploadPly = forwardRef<UploadPlyHandle, UploadPlyProps>(({ scene, camera }, ref) => {
   const [loading, setLoading] = useState(false);
-
-  useImperativeHandle(ref, () => ({
-    handlePlyUpload,
-  }));
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    const engine = new BABYLON.Engine(canvasRef.current, true);
-    const scene = new BABYLON.Scene(engine);
-    setScene(scene);
-
-    const camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 2, Math.PI / 3, 15, new BABYLON.Vector3(0, 2, 0), scene);
-    camera.attachControl(canvasRef.current, true);
-    setCamera(camera);
-
-    const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-    light.intensity = 1.5;
-
-    engine.runRenderLoop(() => {
-      scene.render();
-    });
-
-    window.addEventListener("resize", () => engine.resize());
-
-    return () => {
-      engine.dispose();
-    };
-  }, []);
 
   const handlePlyUpload = async (file: File) => {
     if (!file || !scene) {
@@ -90,11 +64,6 @@ const UploadPly = forwardRef(({ onModelLoaded }: UploadPlyProps, ref) => {
           }
 
           setLoading(false);
-
-          // Notify parent component that the model has been loaded
-          if (onModelLoaded) {
-            onModelLoaded(meshes);
-          }
         },
         (progressEvent) => {
           // Loading progress
@@ -113,10 +82,14 @@ const UploadPly = forwardRef(({ onModelLoaded }: UploadPlyProps, ref) => {
     }
   };
 
+  // Expose the handlePlyUpload function to the parent component
+  useImperativeHandle(ref, () => ({
+    handlePlyUpload,
+  }));
+
   return (
     <div className="flex-grow flex items-center justify-center bg-gray-100 relative">
       {loading && <Loader2 className="w-12 h-12 animate-spin text-gray-700" />}
-      <canvas ref={canvasRef} className="w-full h-full" />
     </div>
   );
 });
